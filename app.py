@@ -4,104 +4,138 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # 웹사이트 기본 설정
-st.set_page_config(page_title="Chirality Analyzer", layout="wide")
-st.title("📊 CD 스펙트럼 대칭성 자동 분석기")
-st.write("농도 오차(진폭)를 자동으로 정규화(Normalization)하고, 수학적 대칭성 점수와 핵심 피크를 자동 진단합니다.")
+st.set_page_config(page_title="Chirality Batch Analyzer", layout="wide")
+st.title("📊 CD 스펙트럼 대량 분석 및 자동 진단 시스템")
+st.write("다수의 실험 데이터를 한 번에 업로드하여 일괄 비교하고, 심층적인 결과 해석 레포트를 제공합니다.")
 
-# 1. 파일 업로드 칸 만들기
+# 1. 파일 다중 업로드 (accept_multiple_files=True 옵션 추가)
 col1, col2 = st.columns(2)
 with col1:
-    file_r = st.file_uploader("R-form CSV 파일을 올려주세요", type=['csv'])
+    r_files = st.file_uploader("📂 R-form CSV 파일들 (드래그로 여러 개 선택 가능)", type=['csv'], accept_multiple_files=True)
 with col2:
-    file_s = st.file_uploader("S-form CSV 파일을 올려주세요", type=['csv'])
+    s_files = st.file_uploader("📂 S-form CSV 파일들 (드래그로 여러 개 선택 가능)", type=['csv'], accept_multiple_files=True)
 
-# 2. 파일 2개가 모두 올라오면 자동 분석 실행
-if file_r and file_s:
-    # CSV 데이터 전처리 (상단 21줄 스킵 및 숫자 데이터 변환)
-    df_r = pd.read_csv(file_r, skiprows=21, header=None)
-    df_s = pd.read_csv(file_s, skiprows=21, header=None)
-    
-    df_r[0] = pd.to_numeric(df_r[0], errors='coerce')
-    df_r[2] = pd.to_numeric(df_r[2], errors='coerce')
-    df_r = df_r.dropna(subset=[0, 2])
-    
-    df_s[0] = pd.to_numeric(df_s[0], errors='coerce')
-    df_s[2] = pd.to_numeric(df_s[2], errors='coerce')
-    df_s = df_s.dropna(subset=[0, 2])
-    
-    # 데이터 정규화 (최대 피크 높이를 1로 스케일링)
-    r_norm = df_r[2] / df_r[2].abs().max()
-    s_norm = df_s[2] / df_s[2].abs().max()
-    
-    # 수학적 대칭성 점수(상관계수) 계산
-    try:
-        similarity = np.corrcoef(r_norm, -s_norm)[0, 1] * 100
-    except:
-        similarity = 0
-    
-    st.divider() 
-    
-    # [결과 1] 대칭성 점수 및 AI 원인 분석 진단 박스
-    st.subheader(f"✅ 수학적 대칭성(Symmetry) 점수: **{similarity:.1f}%**")
-    
-    # AI 자동 분석 레포트 로직
-    if similarity >= 85.0:
-        st.success(f"💡 **[AI 자동 진단 결과: 우수]**\n두 샘플은 **{similarity:.1f}%**의 매우 높은 수학적 대칭성을 보입니다. 농도 오차 보정 후 완벽한 거울상(카이랄성)이 입증되었으며, 공정 조건(어닐링 시간 및 용매 증발)이 잘 통제되었습니다.")
-    elif similarity >= 65.0:
-        st.warning(f"⚠️ **[AI 자동 진단 결과: 보통]**\n대칭성이 **{similarity:.1f}%**로 보통 수준입니다. 미세한 구조적 흐트러짐이 관찰되며, 용매의 증발 속도 불균형이나 샘플 조제 과정에서의 미세 불순물 여부를 점검하세요.")
+# 2. 파일이 업로드되면 일괄 분석 시작
+if r_files and s_files:
+    if len(r_files) != len(s_files):
+        st.error("🚨 R-form과 S-form 파일의 개수가 다릅니다. 짝이 맞게 동일한 개수로 업로드해주세요.")
     else:
-        st.error(f"🚨 **[AI 자동 진단 결과: 경고/불량]**\n대칭성이 **{similarity:.1f}%**로 매우 낮습니다! (Open/Close 조건 의심)\n어닐링(Annealing) 시간이 부족하여 고분자 자가조립이 불완전하거나, 외부 환경 영향으로 분자 배향이 왜곡되었을 가능성이 큽니다.")
+        # 파일 이름을 알파벳 순으로 정렬하여 R과 S의 짝을 자동으로 맞춥니다.
+        r_files_sorted = sorted(r_files, key=lambda x: x.name)
+        s_files_sorted = sorted(s_files, key=lambda x: x.name)
+        
+        summary_list = []
+        detailed_reports = []
 
-    st.write("---")
-    
-    # [결과 2] Before & After 시각화 그래프
-    plot_col1, plot_col2 = st.columns(2)
-    
-    with plot_col1:
-        st.markdown("### ❌ Before: 원본 데이터 (농도 오차 발생)")
-        fig1, ax1 = plt.subplots(figsize=(6, 4))
-        ax1.plot(df_r[0], df_r[2], label='R-form (Raw)', color='blue', linewidth=2)
-        ax1.plot(df_s[0], df_s[2], label='S-form (Raw)', color='orange', linewidth=2)
-        ax1.axhline(0, color='black', linewidth=0.8)
-        ax1.set_xlabel('Wavelength (nm)')
-        ax1.set_ylabel('CD (mdeg)')
-        ax1.legend()
-        ax1.grid(True, linestyle='--', alpha=0.6)
-        st.pyplot(fig1)
+        # 데이터 일괄 처리 루프
+        for r_file, s_file in zip(r_files_sorted, s_files_sorted):
+            pair_name = f"{r_file.name} & {s_file.name}"
+            
+            # 전처리
+            df_r = pd.read_csv(r_file, skiprows=21, header=None)
+            df_s = pd.read_csv(s_file, skiprows=21, header=None)
+            
+            df_r[0] = pd.to_numeric(df_r[0], errors='coerce')
+            df_r[2] = pd.to_numeric(df_r[2], errors='coerce')
+            df_r = df_r.dropna(subset=[0, 2])
+            
+            df_s[0] = pd.to_numeric(df_s[0], errors='coerce')
+            df_s[2] = pd.to_numeric(df_s[2], errors='coerce')
+            df_s = df_s.dropna(subset=[0, 2])
+            
+            # 정규화
+            r_norm = df_r[2] / df_r[2].abs().max()
+            s_norm = df_s[2] / df_s[2].abs().max()
+            
+            # 대칭성 점수
+            try:
+                similarity = np.corrcoef(r_norm, -s_norm)[0, 1] * 100
+            except:
+                similarity = 0
+                
+            # 유효 구간(350nm 이하) 핵심 피크 찾기
+            df_r_valid = df_r[df_r[0] <= 350]
+            df_s_valid = df_s[df_s[0] <= 350]
+            
+            r_peak_wave = df_r[0].loc[df_r_valid[2].idxmax()]
+            s_peak_wave = df_s[0].loc[df_s_valid[2].idxmin()]
+            wave_diff = abs(r_peak_wave - s_peak_wave)
+            
+            # 대시보드용 요약 데이터 저장
+            summary_list.append({
+                "실험 데이터 그룹명": pair_name,
+                "대칭성 점수(%)": round(similarity, 1),
+                "R 최대 피크(nm)": r_peak_wave,
+                "S 최소 피크(nm)": s_peak_wave,
+                "파장 오차(nm)": round(wave_diff, 1)
+            })
+            
+            # 상세 레포트용 데이터 통째로 저장
+            detailed_reports.append({
+                "name": pair_name,
+                "similarity": similarity,
+                "df_r": df_r, "df_s": df_s,
+                "r_norm": r_norm, "s_norm": s_norm,
+                "r_peak": r_peak_wave, "s_peak": s_peak_wave,
+                "wave_diff": wave_diff
+            })
 
-    with plot_col2:
-        st.markdown("### ✨ After: 정규화 데이터 (스케일 보정 완료)")
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
-        ax2.plot(df_r[0], r_norm, label='R-form (Norm)', color='blue', linewidth=2)
-        ax2.plot(df_s[0], s_norm, label='S-form (Norm)', color='orange', linestyle='--', linewidth=2)
-        ax2.axhline(0, color='black', linewidth=0.8)
-        ax2.set_xlabel('Wavelength (nm)')
-        ax2.set_ylabel('Normalized CD')
-        ax2.legend()
-        ax2.grid(True, linestyle='--', alpha=0.6)
-        st.pyplot(fig2)
+        # ---------------------------------------------------------
+        # 화면 출력 1: 전체 데이터 일괄 대시보드
+        # ---------------------------------------------------------
+        st.write("---")
+        st.header("📋 전체 실험 그룹 일괄 평가 대시보드")
+        st.write("여러 실험 데이터를 한눈에 비교하고 평가할 수 있는 통합 결과표입니다.")
+        
+        summary_df = pd.DataFrame(summary_list)
+        # 점수가 높은 행에 시각적 하이라이트(색상)를 줍니다.
+        st.dataframe(summary_df.style.background_gradient(subset=['대칭성 점수(%)'], cmap='Blues'), use_container_width=True)
 
-    # [결과 3] 핵심 피크 파장 & CD값 자동 추출 표 (유효 파장 개선)
-    st.write("---")
-    st.markdown("### 🔍 핵심 피크(Peak) 수치 자동 추출 (200~350nm 구간)")
-    
-    # 💡 [여기서 해결!] 전체 데이터가 아닌, 광학 활성이 나타나는 유효 구간(350nm 이하)만 잘라냅니다.
-    df_r_valid = df_r[df_r[0] <= 350]
-    df_s_valid = df_s[df_s[0] <= 350]
-    
-    # 유효 구간 내에서 최대/최소 피크를 찾습니다.
-    r_max_idx = df_r_valid[2].idxmax()
-    r_min_idx = df_r_valid[2].idxmin()
-    s_max_idx = df_s_valid[2].idxmax()
-    s_min_idx = df_s_valid[2].idxmin()
-    
-    peak_data = {
-        "구분": ["최대 피크 (Positive Peak)", "최소 피크 (Negative Peak)"],
-        "R-form 파장 (nm)": [df_r[0].loc[r_max_idx], df_r[0].loc[r_min_idx]],
-        "R-form CD값": [round(df_r[2].loc[r_max_idx], 2), round(df_r[2].loc[r_min_idx], 2)],
-        "S-form 파장 (nm)": [df_s[0].loc[s_max_idx], df_s[0].loc[s_min_idx]],
-        "S-form CD값": [round(df_s[2].loc[s_max_idx], 2), round(df_s[2].loc[s_min_idx], 2)]
-    }
-    
-    peak_df = pd.DataFrame(peak_data)
-    st.dataframe(peak_df, use_container_width=True, hide_index=True)
+        # ---------------------------------------------------------
+        # 화면 출력 2: 개별 데이터 심층 해석 레포트 (아코디언 형태)
+        # ---------------------------------------------------------
+        st.write("---")
+        st.header("🔎 개별 실험 결과 심층 해석 레포트")
+        st.write("각 항목을 클릭하면 그래프와 함께 AI의 상세 피드백을 확인할 수 있습니다.")
+        
+        for report in detailed_reports:
+            # st.expander를 사용해 클릭하면 열리는 보고서 양식을 만듭니다.
+            with st.expander(f"📂 [{report['similarity']:.1f}%] {report['name']} 상세 분석 보기"):
+                
+                sim = report['similarity']
+                diff = report['wave_diff']
+                
+                # 심층 해석 로직 3단계
+                if sim >= 85:
+                    eval_1 = "매우 우수함. 농도 보정 후 두 스펙트럼이 완벽한 거울상 대칭을 이루고 있으며, 광학적 순도(Enantiomeric Excess)가 높게 유지된 성공적인 결과입니다."
+                    eval_3 = "어닐링(Annealing) 시간 및 용매 증발 속도가 완벽하게 통제되었습니다. 현재의 공정 조건을 표준 지침으로 채택할 수 있습니다."
+                elif sim >= 65:
+                    eval_1 = "보통 수준임. 거울상 경향성은 확인되나 부분적인 비대칭성이 존재합니다. 샘플 내 미세 불순물이나 농도 오차의 영향이 일부 남아있습니다."
+                    eval_3 = "용매 증발 과정에서 미세한 환경 변인이 개입되었을 가능성이 있습니다. 추가적인 공정 최적화가 권장됩니다."
+                else:
+                    eval_1 = "경고 수준. 대칭성이 크게 훼손되었습니다. 물질 고유의 카이랄성이 제대로 발현되지 않았으며, 심각한 구조적 왜곡이 발생했습니다."
+                    eval_3 = "용매 증발 속도의 불균형(Open 조건 등) 또는 어닐링 시간 부족으로 분자 배향이 무너진 것이 주요 원인으로 추정됩니다. 즉각적인 원인 규명이 필요합니다."
+                    
+                if diff <= 5:
+                    eval_2 = f"R-form({report['r_peak']}nm)과 S-form({report['s_peak']}nm)의 핵심 피크 발생 위치가 일치하여, 구조적 동질성이 교차 검증되었습니다."
+                else:
+                    eval_2 = f"두 물질 간의 피크 파장 위치가 {diff:.1f}nm 어긋나 있습니다. 분자 간 상호작용의 차이나 측정 장비의 세팅 오류가 의심됩니다."
+
+                st.info(f"**1. 구조 및 카이랄성 평가:** {eval_1}\n\n**2. 분광학적 피크 일치도:** {eval_2}\n\n**3. 종합 공정 피드백:** {eval_3}")
+                
+                plot_col1, plot_col2 = st.columns(2)
+                with plot_col1:
+                    st.caption("원본 데이터 (농도 오차 포함)")
+                    fig1, ax1 = plt.subplots(figsize=(5, 3))
+                    ax1.plot(report['df_r'][0], report['df_r'][2], label='R-form (Raw)', color='blue')
+                    ax1.plot(report['df_s'][0], report['df_s'][2], label='S-form (Raw)', color='orange')
+                    ax1.axhline(0, color='black', linewidth=0.5)
+                    st.pyplot(fig1)
+
+                with plot_col2:
+                    st.caption("정규화 데이터 (보정 완료)")
+                    fig2, ax2 = plt.subplots(figsize=(5, 3))
+                    ax2.plot(report['df_r'][0], report['r_norm'], label='R-form (Norm)', color='blue')
+                    ax2.plot(report['df_s'][0], report['s_norm'], label='S-form (Norm)', color='orange', linestyle='--')
+                    ax2.axhline(0, color='black', linewidth=0.5)
+                    st.pyplot(fig2)
