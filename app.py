@@ -33,7 +33,7 @@ if file_r and file_s:
     r_norm = df_r[2] / df_r[2].abs().max()
     s_norm = df_s[2] / df_s[2].abs().max()
     
-    # 3. 대칭성 점수 계산
+    # 3. 대칭성 점수 계산 (점수를 계산할 때는 유사도 판별을 위해 -s_norm 사용)
     try:
         similarity = np.corrcoef(r_norm, -s_norm)[0, 1] * 100
     except:
@@ -45,14 +45,12 @@ if file_r and file_s:
     st.subheader(f"✅ 수학적 대칭성(Symmetry) 점수: **{similarity:.1f}%**")
     st.write("---")
     
-    # 🚀 [업그레이드 1: Before & After 시각화]
     # 화면을 좌우 두 칸으로 나누어 비교합니다.
     plot_col1, plot_col2 = st.columns(2)
     
     with plot_col1:
         st.markdown("### ❌ Before: 원본 데이터 (농도 오차 발생)")
         fig1, ax1 = plt.subplots(figsize=(6, 4))
-        # 원본 데이터는 S-form을 뒤집지 않고 날것 그대로 보여줍니다.
         ax1.plot(df_r[0], df_r[2], label='R-form (Raw)', color='blue', linewidth=2)
         ax1.plot(df_s[0], df_s[2], label='S-form (Raw)', color='orange', linewidth=2)
         ax1.axhline(0, color='black', linewidth=0.8)
@@ -62,12 +60,12 @@ if file_r and file_s:
         ax1.grid(True, linestyle='--', alpha=0.6)
         st.pyplot(fig1)
 
-with plot_col2:
+    with plot_col2:
         st.markdown("### ✨ After: 정규화 데이터 (스케일 보정 완료)")
         fig2, ax2 = plt.subplots(figsize=(6, 4))
-        ax2.plot(df_r[0], r_norm, label='R-form (Norm)', color='blue', linewidth=2)
         
-        # 👇 마이너스(-)를 빼고 s_norm으로 변경, 라벨 이름도 수정!
+        ax2.plot(df_r[0], r_norm, label='R-form (Norm)', color='blue', linewidth=2)
+        # 💡 요청하신 대로 마이너스(-)를 제거하여 완벽한 거울상 형태로 출력합니다!
         ax2.plot(df_s[0], s_norm, label='S-form (Norm)', color='orange', linestyle='--', linewidth=2)
         
         ax2.axhline(0, color='black', linewidth=0.8)
