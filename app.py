@@ -24,11 +24,10 @@ with st.sidebar:
     
     st.write("---")
     st.write("🔍 피크(Peak) 추출 알고리즘 설정")
-    # scipy의 find_peaks 민감도 조절
     prominence = st.slider("피크 감지 민감도 (Prominence)", min_value=0.01, max_value=2.0, value=0.1, step=0.05)
     
 # ==========================================
-# 2. 데이터 업로드 및 파싱 (범용)
+# 2. 데이터 업로드 및 스마트 파싱 (예외 처리)
 # ==========================================
 uploaded_files = st.file_uploader("📂 분광 데이터 CSV 파일 업로드 (다중 선택 가능)", type=['csv'], accept_multiple_files=True)
 
@@ -39,32 +38,40 @@ if uploaded_files:
     fig, ax = plt.subplots(figsize=(10, 5))
     peak_summary = []
     
-    # 탭을 활용하여 원본 데이터와 피크 데이터를 나눠서 보여줌
     data_tab1, data_tab2 = st.tabs(["📈 오버레이 스펙트럼", "📋 추출된 Peak 데이터"])
     
     for f in uploaded_files:
         try:
-            # [범용 파싱 로직] 파일의 형태와 상관없이 숫자 데이터만 추출
-            df = pd.read_csv(f)
+            # 파일 포인터를 처음으로 되돌림
+            f.seek(0) 
             
-            # 1열(X축-파장)과 마지막 열(Y축-강도/흡광도)을 강제로 숫자로 변환 (텍스트 헤더 무시)
-            x_col = df.columns[0]
-            y_col = df.columns[-1]
+            try:
+                # [시도 1] 일반적인 깔끔한 CSV 파일로 읽기 시도
+                df = pd.read_csv(f)
+                x_col = df.columns[0]
+                y_col = df.columns[-1]
+            except:
+                # [시도 2] 에러 발생 시: CD 스펙트럼 등 장비 Raw Data로 간주하고 스마트 파싱
+                f.seek(0)
+                df = pd.read_csv(f, skiprows=21, header=None)
+                x_col = 0 # X축: 파장(Wavelength)
+                y_col = 2 # Y축: CD 강도 (장비마다 다를 수 있으나 CD는 보통 3번째 열)
             
+            # 숫자 데이터만 추출 (문자가 섞여 있으면 NaN으로 변환 후 제거)
             df[x_col] = pd.to_numeric(df[x_col], errors='coerce')
             df[y_col] = pd.to_numeric(df[y_col], errors='coerce')
-            df = df.dropna(subset=[x_col, y_col]) # NaN 값 제거
+            df = df.dropna(subset=[x_col, y_col]) 
             
             x = df[x_col].values
             y = df[y_col].values
             
-            # Scipy 알고리즘을 이용한 피크 자동 탐지
-            peaks_pos, _ = find_peaks(y, prominence=prominence) # 양(+)의 피크
-            peaks_neg, _ = find_peaks(-y, prominence=prominence) # 음(-)의 피크 (CD 스펙트럼용)
+            # Scipy 알고리즘을 이용한 피크 탐지
+            peaks_pos, _ = find_peaks(y, prominence=prominence)
+            peaks_neg, _ = find_peaks(-y, prominence=prominence)
             
             # 그래프 그리기
             ax.plot(x, y, label=f.name, linewidth=1.5)
-            ax.plot(x[peaks_pos], y[peaks_pos], "x", color='red', markersize=6) # 피크 표시
+            ax.plot(x[peaks_pos], y[peaks_pos], "x", color='red', markersize=6)
             ax.plot(x[peaks_neg], y[peaks_neg], "x", color='blue', markersize=6)
             
             # 피크 데이터 저장
@@ -74,7 +81,7 @@ if uploaded_files:
                 peak_summary.append({"샘플명": f.name, "구분": "Negative Peak", "위치(X)": round(x[p], 2), "강도(Y)": round(y[p], 3)})
                 
         except Exception as e:
-            st.error(f"{f.name} 처리 중 오류 발생: {e}")
+            st.error(f"{f.name} 처리 중 알 수 없는 오류 발생: {e}")
 
     # 그래프 세팅 마무리
     ax.axhline(0, color='black', linewidth=0.8)
@@ -87,7 +94,6 @@ if uploaded_files:
     with data_tab2:
         if peak_summary:
             peak_df = pd.DataFrame(peak_summary)
-            # 위치(X)를 기준으로 오름차순 정렬
             peak_df = peak_df.sort_values(by=["위치(X)"]).reset_index(drop=True)
             st.dataframe(peak_df, use_container_width=True)
         else:
@@ -108,25 +114,21 @@ if uploaded_files:
         else:
             with st.spinner("AI가 데이터를 분석하고 리포트를 작성하고 있습니다..."):
                 try:
-                    # OpenAI 클라이언트 생성 (최신 API 방식)
                     client = openai.OpenAI(api_key=api_key)
                     
-                    # LLM에게 던질 프롬프트(명령어) 작성
                     prompt_data = peak_df.to_string(index=False)
                     system_prompt = "당신은 반도체 및 신소재 데이터 분석을 전문으로 하는 수석 데이터 사이언티스트입니다. 제공된 분광 데이터의 피크 수치를 바탕으로 샘플 간의 차이, 물질의 구조적 특성, 그리고 데이터가 의미하는 물리/화학적 인사이트를 전문적인 보고서 형식으로 작성해 주세요."
                     user_prompt = f"다음은 {spec_type} 실험을 통해 얻은 다중 샘플의 피크(Peak) 데이터입니다.\n\n{prompt_data}\n\n이 데이터를 비교 분석하여 종합적인 결과 해석 리포트를 작성해 줘."
                     
-                    # API 호출
                     response = client.chat.completions.create(
-                        model="gpt-4o-mini", # 비용 효율적인 최신 모델
+                        model="gpt-4o-mini",
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
                         ],
-                        temperature=0.3 # 분석적인 답변을 위해 창의성 낮춤
+                        temperature=0.3
                     )
                     
-                    # 결과 출력
                     st.success("✅ AI 분석 완료!")
                     st.markdown(f"### 📑 {spec_type} 종합 분석 리포트")
                     st.write(response.choices[0].message.content)
