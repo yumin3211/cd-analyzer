@@ -3,27 +3,28 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 웹사이트 기본 설정 (가장 위에 한 번만 작성)
+# 웹사이트 기본 설정
 st.set_page_config(page_title="Data Analytics Portfolio", layout="wide")
 
 st.title("🚀 통합 데이터 분석 및 이상치 탐지 플랫폼")
 st.write("소재의 특성 비교 검증부터 범용 통계 분석까지 지원하는 하이브리드 대시보드입니다.")
 
-# 💡 [핵심 포인트] 두 가지 기능을 탭(Tab)으로 나눕니다!
+# 두 가지 기능을 탭(Tab)으로 분리
 tab1, tab2 = st.tabs(["🧪 소재 특성 비교 (카이랄성 검증)", "📈 범용 통계 분석 (이상치 탐지)"])
 
 # ==========================================
-# [탭 1] 기존의 R-form / S-form 대칭성 비교 모드
+# [탭 1] 소재 대칭성 비교 (그래프 및 심층 분석 복구 완료!)
 # ==========================================
 with tab1:
     st.header("🧪 소재 특성 및 대칭성 비교 검증 (A/B Test)")
-    st.write("R-form과 S-form 데이터를 비교하여 거울상 이성질체 특성을 분석합니다.")
+    st.write("R-form과 S-form 데이터를 비교하여 거울상 이성질체 특성을 심층 분석합니다.")
     
     st.info("💡 **[업로드 양식]** `R_open_30.csv` 또는 `R_60min.csv` 형식의 파일을 짝맞춰 올려주세요.")
     uploaded_files = st.file_uploader("📂 비교할 CSV 파일들을 모두 선택해서 올려주세요", type=['csv'], accept_multiple_files=True, key="tab1_upload")
 
     if uploaded_files:
         experiments = {}
+        # 파일명 분석 및 짝맞추기
         for f in uploaded_files:
             clean_name = f.name.replace('.csv', '').replace('.CSV', '')
             parts = clean_name.split('_')
@@ -48,6 +49,9 @@ with tab1:
             elif form == 'S': experiments[exp_key]['S'] = f
 
         summary_list = []
+        detailed_reports = [] # 💡 사라졌던 심층 레포트 데이터를 다시 저장합니다!
+
+        # 데이터 분석 진행
         for key, data in experiments.items():
             if data['R'] is not None and data['S'] is not None:
                 df_r = pd.read_csv(data['R'], skiprows=21, header=None)
@@ -63,15 +67,69 @@ with tab1:
                 try: similarity = np.corrcoef(r_norm, -s_norm)[0, 1] * 100
                 except: similarity = 0
                 
+                # 피크 파장 추출 (유효 구간 350nm 이하)
+                df_r_valid = df_r[df_r[0] <= 350]
+                df_s_valid = df_s[df_s[0] <= 350]
+                r_peak_wave = df_r[0].loc[df_r_valid[2].idxmax()]
+                s_peak_wave = df_s[0].loc[df_s_valid[2].idxmin()]
+                
                 summary_list.append({
                     "실험 조건": data['Condition'], "어닐링 시간": data['Time'],
                     "대칭성 점수(%)": round(similarity, 1)
                 })
+                
+                detailed_reports.append({
+                    "cond": data['Condition'], "time": data['Time'], "similarity": similarity,
+                    "r_peak": r_peak_wave, "s_peak": s_peak_wave,
+                    "df_r": df_r, "df_s": df_s, "r_norm": r_norm, "s_norm": s_norm
+                })
 
+        # 화면 출력부 (표 + 💡심층 그래프 해설 복구)
         if summary_list:
-            st.write("### 📋 분석 결과 요약")
+            st.write("### 📋 분석 결과 요약 (대시보드)")
             summary_df = pd.DataFrame(summary_list)
             st.dataframe(summary_df.style.background_gradient(subset=['대칭성 점수(%)'], cmap='Greens'), use_container_width=True)
+
+            st.write("---")
+            st.header("🔎 분광학적 심층 해석 및 시각화 레포트")
+            
+            for report in detailed_reports:
+                sim = report['similarity']
+                title = f"📂 [{report['cond']} / {report['time']}] 대칭성: {sim:.1f}%"
+                
+                with st.expander(title):
+                    if sim >= 85:
+                        eval_1 = f"**[구조 및 광학 활성]** 수학적 대칭성 {sim:.1f}%로, 농도 오차 보정 후 완벽한 거울상 이성질체(Enantiomer) 관계가 입증되었습니다. R-form과 S-form이 뚜렷하게 반대 부호의 Cotton Effect를 나타냅니다."
+                        eval_2 = f"**[공정 해석]** '{report['cond']}' 조건에서 {report['time']} 동안 진행된 어닐링 과정이 성공적이었습니다. 용매의 증발 속도가 이상적으로 제어되어 고분자 사슬이 안정한 상태로 배향되었습니다."
+                    elif sim >= 65:
+                        eval_1 = f"**[구조 및 광학 활성]** 대칭성 {sim:.1f}%로 기본적인 카이랄성 경향성은 확인되나, 부분적인 비대칭(Asymmetry) 스펙트럼이 관찰됩니다."
+                        eval_2 = f"**[공정 해석]** '{report['cond']}' 조건의 증발 속도 불균형 또는 {report['time']}의 어닐링 시간이 배향을 완벽히 유도하기에는 다소 부족했던 것으로 추정됩니다. 추가적인 공정 최적화가 요구됩니다."
+                    else:
+                        eval_1 = f"**[구조 및 광학 활성]** 대칭성 {sim:.1f}%로, 물질 고유의 거울상 카이랄성 발현이 심각하게 훼손되었습니다."
+                        eval_2 = f"**[공정 해석]** '{report['cond']}' 조건으로 인해 분자들이 입체 규칙적으로 배열될 열역학적 여유를 갖지 못했습니다. 즉각적인 공정 조건 수정(Half-open 전환 등)이 권장됩니다."
+                    
+                    st.markdown(eval_1)
+                    st.markdown(eval_2)
+                    st.markdown(f"**[피크 파장 분석]** R-form의 최고점(Max)은 **{report['r_peak']}nm**, S-form의 최저점(Min)은 **{report['s_peak']}nm**에서 관찰되었습니다.")
+                    
+                    plot_col1, plot_col2 = st.columns(2)
+                    with plot_col1:
+                        fig1, ax1 = plt.subplots(figsize=(5, 3))
+                        ax1.plot(report['df_r'][0], report['df_r'][2], label='R-form (Raw)', color='blue')
+                        ax1.plot(report['df_s'][0], report['df_s'][2], label='S-form (Raw)', color='orange')
+                        ax1.axhline(0, color='black', linewidth=0.5)
+                        ax1.set_title("원본 데이터 (Raw)")
+                        ax1.legend()
+                        st.pyplot(fig1)
+
+                    with plot_col2:
+                        fig2, ax2 = plt.subplots(figsize=(5, 3))
+                        ax2.plot(report['df_r'][0], report['r_norm'], label='R-form (Norm)', color='blue')
+                        ax2.plot(report['df_s'][0], report['s_norm'], label='S-form (Norm)', color='orange', linestyle='--')
+                        ax2.axhline(0, color='black', linewidth=0.5)
+                        ax2.set_title("정규화 데이터 (Normalized)")
+                        ax2.legend()
+                        st.pyplot(fig2)
 
 # ==========================================
 # [탭 2] 어떤 데이터든 다루는 범용 이상치 탐지 모드
