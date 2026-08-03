@@ -62,12 +62,14 @@ if file_r and file_s:
         ax1.grid(True, linestyle='--', alpha=0.6)
         st.pyplot(fig1)
 
-    with plot_col2:
+   with plot_col2:
         st.markdown("### ✨ After: 정규화 데이터 (스케일 보정 완료)")
         fig2, ax2 = plt.subplots(figsize=(6, 4))
-        # 보정된 데이터는 S-form을 뒤집어서(-s_norm) 완벽한 거울상인지 확인합니다.
         ax2.plot(df_r[0], r_norm, label='R-form (Norm)', color='blue', linewidth=2)
-        ax2.plot(df_s[0], -s_norm, label='S-form (Flipped, Norm)', color='orange', linestyle='--', linewidth=2)
+        
+        # 👇 마이너스(-)를 빼고 s_norm으로 변경, 라벨 이름도 수정!
+        ax2.plot(df_s[0], s_norm, label='S-form (Norm)', color='orange', linestyle='--', linewidth=2)
+        
         ax2.axhline(0, color='black', linewidth=0.8)
         ax2.set_xlabel('Wavelength (nm)')
         ax2.set_ylabel('Normalized CD')
