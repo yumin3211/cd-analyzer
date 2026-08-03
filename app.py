@@ -62,7 +62,7 @@ if file_r and file_s:
         ax1.grid(True, linestyle='--', alpha=0.6)
         st.pyplot(fig1)
 
-   with plot_col2:
+with plot_col2:
         st.markdown("### ✨ After: 정규화 데이터 (스케일 보정 완료)")
         fig2, ax2 = plt.subplots(figsize=(6, 4))
         ax2.plot(df_r[0], r_norm, label='R-form (Norm)', color='blue', linewidth=2)
