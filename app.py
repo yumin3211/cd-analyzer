@@ -1,144 +1,135 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
+import openai
 
-st.set_page_config(page_title="Chirality Batch Analyzer", layout="wide")
-st.title("📊 CD 스펙트럼 대량 분석 및 심층 진단 시스템")
-st.write("다양한 파일명 양식을 자동으로 인식하여 분석하고, 전문가 수준의 분광학적 심층 해설을 제공합니다.")
+# 웹사이트 기본 설정
+st.set_page_config(page_title="AI Spectral Analyzer", layout="wide")
 
-st.info("💡 **[업로드 가능 양식]** `R_open_30.csv` (3단) 또는 `R_60min.csv` (2단, 자동으로 Close 조건 부여)")
-uploaded_files = st.file_uploader("📂 실험 CSV 파일들을 모두 선택해서 올려주세요", type=['csv'], accept_multiple_files=True)
+st.title("🔬 AI 기반 범용 분광 데이터 자동 분석 플랫폼")
+st.write("다중 스펙트럼(CD, UV-Vis, IR 등) 데이터를 비교하고, OpenAI API를 활용하여 실험 결과를 자동으로 해석합니다.")
+
+# ==========================================
+# 1. 사이드바: 분석 설정 및 OpenAI API 세팅
+# ==========================================
+with st.sidebar:
+    st.header("⚙️ 분석 및 AI 설정")
+    st.info("AI 리포트 생성을 위해 OpenAI API Key가 필요합니다.")
+    api_key = st.text_input("🔑 OpenAI API Key 입력", type="password")
+    
+    st.write("---")
+    spec_type = st.selectbox("📊 분광 데이터 종류", ["원편광이색성 (CD)", "자외선-가시광선 (UV-Vis)", "적외선 (FT-IR)", "라만 (Raman)", "기타"])
+    
+    st.write("---")
+    st.write("🔍 피크(Peak) 추출 알고리즘 설정")
+    # scipy의 find_peaks 민감도 조절
+    prominence = st.slider("피크 감지 민감도 (Prominence)", min_value=0.01, max_value=2.0, value=0.1, step=0.05)
+    
+# ==========================================
+# 2. 데이터 업로드 및 파싱 (범용)
+# ==========================================
+uploaded_files = st.file_uploader("📂 분광 데이터 CSV 파일 업로드 (다중 선택 가능)", type=['csv'], accept_multiple_files=True)
 
 if uploaded_files:
-    experiments = {}
+    st.write("---")
+    st.header("📊 다중 샘플 스펙트럼 비교 및 Peak 자동 추출")
     
-    # 1. 파일명 자동 분석 및 예외 처리
+    fig, ax = plt.subplots(figsize=(10, 5))
+    peak_summary = []
+    
+    # 탭을 활용하여 원본 데이터와 피크 데이터를 나눠서 보여줌
+    data_tab1, data_tab2 = st.tabs(["📈 오버레이 스펙트럼", "📋 추출된 Peak 데이터"])
+    
     for f in uploaded_files:
-        clean_name = f.name.replace('.csv', '').replace('.CSV', '')
-        parts = clean_name.split('_')
-        
-        # 양식 1: R_open_30.csv (3부분으로 나뉠 때)
-        if len(parts) >= 3:
-            form = parts[0].upper()
-            condition_raw = parts[1].lower()
-            time_raw = parts[2].replace('min', '') # min 글자가 있으면 제거
+        try:
+            # [범용 파싱 로직] 파일의 형태와 상관없이 숫자 데이터만 추출
+            df = pd.read_csv(f)
             
-        # 양식 2: R_60min.csv (2부분으로 나뉠 때 -> 조건이 생략되었으므로 close로 간주)
-        elif len(parts) == 2:
-            form = parts[0].upper()
-            condition_raw = 'close'
-            time_raw = parts[1].replace('min', '')
+            # 1열(X축-파장)과 마지막 열(Y축-강도/흡광도)을 강제로 숫자로 변환 (텍스트 헤더 무시)
+            x_col = df.columns[0]
+            y_col = df.columns[-1]
+            
+            df[x_col] = pd.to_numeric(df[x_col], errors='coerce')
+            df[y_col] = pd.to_numeric(df[y_col], errors='coerce')
+            df = df.dropna(subset=[x_col, y_col]) # NaN 값 제거
+            
+            x = df[x_col].values
+            y = df[y_col].values
+            
+            # Scipy 알고리즘을 이용한 피크 자동 탐지
+            peaks_pos, _ = find_peaks(y, prominence=prominence) # 양(+)의 피크
+            peaks_neg, _ = find_peaks(-y, prominence=prominence) # 음(-)의 피크 (CD 스펙트럼용)
+            
+            # 그래프 그리기
+            ax.plot(x, y, label=f.name, linewidth=1.5)
+            ax.plot(x[peaks_pos], y[peaks_pos], "x", color='red', markersize=6) # 피크 표시
+            ax.plot(x[peaks_neg], y[peaks_neg], "x", color='blue', markersize=6)
+            
+            # 피크 데이터 저장
+            for p in peaks_pos:
+                peak_summary.append({"샘플명": f.name, "구분": "Positive Peak", "위치(X)": round(x[p], 2), "강도(Y)": round(y[p], 3)})
+            for p in peaks_neg:
+                peak_summary.append({"샘플명": f.name, "구분": "Negative Peak", "위치(X)": round(x[p], 2), "강도(Y)": round(y[p], 3)})
+                
+        except Exception as e:
+            st.error(f"{f.name} 처리 중 오류 발생: {e}")
+
+    # 그래프 세팅 마무리
+    ax.axhline(0, color='black', linewidth=0.8)
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.grid(True, linestyle='--', alpha=0.6)
+    
+    with data_tab1:
+        st.pyplot(fig)
+        
+    with data_tab2:
+        if peak_summary:
+            peak_df = pd.DataFrame(peak_summary)
+            # 위치(X)를 기준으로 오름차순 정렬
+            peak_df = peak_df.sort_values(by=["위치(X)"]).reset_index(drop=True)
+            st.dataframe(peak_df, use_container_width=True)
         else:
-            continue # 양식이 전혀 안 맞으면 패스
-            
-        # 조건 이름 예쁘게 포맷팅
-        if condition_raw == 'open': cond_display = "Open (공기 노출)"
-        elif condition_raw in ['h', 'half']: cond_display = "Half-open (부분 차단)"
-        elif condition_raw == 'close': cond_display = "Close (완전 차단)"
-        else: cond_display = condition_raw
-        
-        exp_key = f"{cond_display}_{time_raw}분"
-        
-        if exp_key not in experiments:
-            experiments[exp_key] = {'R': None, 'S': None, 'Condition': cond_display, 'Time': f"{time_raw}분"}
-            
-        if form == 'R': experiments[exp_key]['R'] = f
-        elif form == 'S': experiments[exp_key]['S'] = f
+            st.info("설정된 민감도에서 감지된 피크가 없습니다. 왼쪽 사이드바에서 민감도를 조절해 보세요.")
 
-    # 2. 데이터 분석 로직
-    summary_list = []
-    detailed_reports = []
-
-    for key, data in experiments.items():
-        if data['R'] is not None and data['S'] is not None:
-            r_file, s_file = data['R'], data['S']
-            cond, time = data['Condition'], data['Time']
-            
-            df_r = pd.read_csv(r_file, skiprows=21, header=None)
-            df_s = pd.read_csv(s_file, skiprows=21, header=None)
-            
-            df_r[0] = pd.to_numeric(df_r[0], errors='coerce')
-            df_r[2] = pd.to_numeric(df_r[2], errors='coerce')
-            df_r = df_r.dropna(subset=[0, 2])
-            
-            df_s[0] = pd.to_numeric(df_s[0], errors='coerce')
-            df_s[2] = pd.to_numeric(df_s[2], errors='coerce')
-            df_s = df_s.dropna(subset=[0, 2])
-            
-            r_norm = df_r[2] / df_r[2].abs().max()
-            s_norm = df_s[2] / df_s[2].abs().max()
-            
-            try:
-                similarity = np.corrcoef(r_norm, -s_norm)[0, 1] * 100
-            except:
-                similarity = 0
-                
-            df_r_valid = df_r[df_r[0] <= 350]
-            df_s_valid = df_s[df_s[0] <= 350]
-            
-            r_peak_wave = df_r[0].loc[df_r_valid[2].idxmax()]
-            s_peak_wave = df_s[0].loc[df_s_valid[2].idxmin()]
-            
-            summary_list.append({
-                "실험 조건": cond, "어닐링 시간": time,
-                "대칭성 점수(%)": round(similarity, 1),
-                "R 최대 파장(nm)": r_peak_wave, "S 최소 파장(nm)": s_peak_wave,
-            })
-            
-            detailed_reports.append({
-                "key": key, "cond": cond, "time": time, "similarity": similarity,
-                "r_peak": r_peak_wave, "s_peak": s_peak_wave,
-                "df_r": df_r, "df_s": df_s, "r_norm": r_norm, "s_norm": s_norm
-            })
-
-    # 3. 결과 화면 출력
-    if summary_list:
-        st.write("---")
-        st.header("📋 실험 조건별 통합 평가 대시보드")
-        summary_df = pd.DataFrame(summary_list)
-        st.dataframe(summary_df.style.background_gradient(subset=['대칭성 점수(%)'], cmap='Greens'), use_container_width=True)
-
-        st.write("---")
-        st.header("🔎 분광학적 심층 해석 레포트")
-        
-        for report in detailed_reports:
-            sim = report['similarity']
-            title = f"📂 [{report['cond']} / {report['time']}] 대칭성: {sim:.1f}%"
-            
-            with st.expander(title):
-                # 💡 [핵심 강화] 매우 구체적이고 전문적인 화학/물리적 해석 코멘트
-                if sim >= 85:
-                    eval_1 = f"**[구조 및 광학 활성]** 수학적 대칭성 {sim:.1f}%로, 농도 오차 보정 후 완벽한 거울상 이성질체(Enantiomer) 관계가 입증되었습니다. R-form과 S-form이 뚜렷하게 반대 부호의 Cotton Effect를 나타내며, 광학 순도(Enantiomeric Excess)가 매우 우수하게 보존되었습니다."
-                    eval_2 = f"**[공정 해석]** '{report['cond']}' 조건에서 {report['time']} 동안 진행된 어닐링 과정이 성공적이었습니다. 용매의 증발 속도가 이상적으로 제어되어 고분자 사슬이 열역학적으로 가장 안정한 상태로 배향(Orientation) 및 자가조립(Self-assembly)을 이루었습니다."
-                elif sim >= 65:
-                    eval_1 = f"**[구조 및 광학 활성]** 대칭성 {sim:.1f}%로 기본적인 카이랄성 경향성은 확인되나, 부분적인 비대칭(Asymmetry) 스펙트럼이 관찰됩니다. 특정 파장 대역에서 분자 간 상호작용의 미세한 흐트러짐이 존재합니다."
-                    eval_2 = f"**[공정 해석]** '{report['cond']}' 조건의 증발 속도 불균형 또는 {report['time']}의 어닐링 시간이 배향을 완벽히 유도하기에는 다소 부족했던 것으로 추정됩니다. 필름 표면의 국부적인 두께 차이나 용매 잔류 여부를 점검할 필요가 있습니다."
-                else:
-                    eval_1 = f"**[구조 및 광학 활성]** 대칭성 {sim:.1f}%로, 물질 고유의 거울상 카이랄성 발현이 심각하게 훼손되었습니다. 바탕선 요동(Baseline drift)이 심하고, 유효 흡수 파장 대역에서 역전 현상이 제대로 나타나지 않습니다."
-                    eval_2 = f"**[공정 해석]** '{report['cond']}' 조건으로 인해 용매가 지나치게 빨리 증발(Open)하거나 갇혀있어(Close), 분자들이 입체 규칙적(Stereoregular)으로 배열될 충분한 열역학적 여유를 갖지 못했습니다. 즉각적인 공정 조건 수정(Half-open 전환 등)이 강력히 권장됩니다."
-                
-                st.markdown(eval_1)
-                st.markdown(eval_2)
-                st.markdown(f"**[피크 파장 분석]** R-form의 최대 양(+)의 피크는 **{report['r_peak']}nm**, S-form의 최대 음(-)의 피크는 **{report['s_peak']}nm**에서 관찰되었습니다.")
-                
-                plot_col1, plot_col2 = st.columns(2)
-                with plot_col1:
-                    fig1, ax1 = plt.subplots(figsize=(5, 3))
-                    ax1.plot(report['df_r'][0], report['df_r'][2], label='R-form (Raw)', color='blue')
-                    ax1.plot(report['df_s'][0], report['df_s'][2], label='S-form (Raw)', color='orange')
-                    ax1.axhline(0, color='black', linewidth=0.5)
-                    ax1.set_title("원본 데이터 (Raw)")
-                    ax1.legend()
-                    st.pyplot(fig1)
-
-                with plot_col2:
-                    fig2, ax2 = plt.subplots(figsize=(5, 3))
-                    ax2.plot(report['df_r'][0], report['r_norm'], label='R-form (Norm)', color='blue')
-                    ax2.plot(report['df_s'][0], report['s_norm'], label='S-form (Norm)', color='orange', linestyle='--')
-                    ax2.axhline(0, color='black', linewidth=0.5)
-                    ax2.set_title("정규화 데이터 (Normalized)")
-                    ax2.legend()
-                    st.pyplot(fig2)
-    else:
-        st.warning("⚠️ 분석할 수 있는 R/S 파일 짝이 없습니다. 파일명을 확인해 주세요.")
+    # ==========================================
+    # 3. OpenAI API 연동 AI 자동 리포트 생성
+    # ==========================================
+    st.write("---")
+    st.header("🤖 LLM 기반 실험 결과 자동 해석 리포트")
+    st.write("추출된 다중 샘플의 Peak 데이터를 바탕으로 AI가 화학/물리적 의미를 해석합니다.")
+    
+    if st.button("🚀 AI 결과 분석 실행"):
+        if not api_key:
+            st.error("⚠️ 좌측 사이드바에 OpenAI API Key를 입력해 주세요!")
+        elif not peak_summary:
+            st.warning("⚠️ 추출된 피크 데이터가 없어 분석할 수 없습니다.")
+        else:
+            with st.spinner("AI가 데이터를 분석하고 리포트를 작성하고 있습니다..."):
+                try:
+                    # OpenAI 클라이언트 생성 (최신 API 방식)
+                    client = openai.OpenAI(api_key=api_key)
+                    
+                    # LLM에게 던질 프롬프트(명령어) 작성
+                    prompt_data = peak_df.to_string(index=False)
+                    system_prompt = "당신은 반도체 및 신소재 데이터 분석을 전문으로 하는 수석 데이터 사이언티스트입니다. 제공된 분광 데이터의 피크 수치를 바탕으로 샘플 간의 차이, 물질의 구조적 특성, 그리고 데이터가 의미하는 물리/화학적 인사이트를 전문적인 보고서 형식으로 작성해 주세요."
+                    user_prompt = f"다음은 {spec_type} 실험을 통해 얻은 다중 샘플의 피크(Peak) 데이터입니다.\n\n{prompt_data}\n\n이 데이터를 비교 분석하여 종합적인 결과 해석 리포트를 작성해 줘."
+                    
+                    # API 호출
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini", # 비용 효율적인 최신 모델
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        temperature=0.3 # 분석적인 답변을 위해 창의성 낮춤
+                    )
+                    
+                    # 결과 출력
+                    st.success("✅ AI 분석 완료!")
+                    st.markdown(f"### 📑 {spec_type} 종합 분석 리포트")
+                    st.write(response.choices[0].message.content)
+                    
+                except Exception as e:
+                    st.error(f"OpenAI API 호출 중 오류가 발생했습니다: {e}")
