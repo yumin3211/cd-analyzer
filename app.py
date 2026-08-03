@@ -81,12 +81,19 @@ if file_r and file_s:
         ax2.grid(True, linestyle='--', alpha=0.6)
         st.pyplot(fig2)
 
-    # [결과 3] 핵심 피크 파장 & CD값 자동 추출 표
+    # [결과 3] 핵심 피크 파장 & CD값 자동 추출 표 (유효 파장 개선)
     st.write("---")
-    st.markdown("### 🔍 핵심 피크(Peak) 수치 자동 추출")
+    st.markdown("### 🔍 핵심 피크(Peak) 수치 자동 추출 (200~350nm 구간)")
     
-    r_max_idx, r_min_idx = df_r[2].idxmax(), df_r[2].idxmin()
-    s_max_idx, s_min_idx = df_s[2].idxmax(), df_s[2].idxmin()
+    # 💡 [여기서 해결!] 전체 데이터가 아닌, 광학 활성이 나타나는 유효 구간(350nm 이하)만 잘라냅니다.
+    df_r_valid = df_r[df_r[0] <= 350]
+    df_s_valid = df_s[df_s[0] <= 350]
+    
+    # 유효 구간 내에서 최대/최소 피크를 찾습니다.
+    r_max_idx = df_r_valid[2].idxmax()
+    r_min_idx = df_r_valid[2].idxmin()
+    s_max_idx = df_s_valid[2].idxmax()
+    s_min_idx = df_s_valid[2].idxmin()
     
     peak_data = {
         "구분": ["최대 피크 (Positive Peak)", "최소 피크 (Negative Peak)"],
