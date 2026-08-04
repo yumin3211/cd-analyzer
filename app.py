@@ -6,10 +6,10 @@ from scipy.signal import find_peaks
 import openai
 
 # 웹사이트 기본 설정
-st.set_page_config(page_title="Chiral Time-Series AI Analyzer", layout="wide")
+st.set_page_config(page_title="Advanced Chiral Research Analyzer", layout="wide")
 
-st.title("🧪 카이랄 분광 데이터 시간별 어닐링 및 대칭성 정밀 분석 플랫폼")
-st.write("밀폐(Close) 조건 및 어닐링 시간(40~120분)에 따른 R/S 이성질체의 거울상 대칭성 정량화 및 AI 기반 실험 리포트 자동 생성 시스템")
+st.title("🧪 차세대 카이랄 분광 데이터 연구 및 공정 정밀 분석 플랫폼")
+st.write("밀폐(Close) 조건 및 어닐링 시간별 데이터 기반: Executive Summary, 원인 진단, 그리고 구체적인 Action Plan을 도출합니다.")
 
 # ==========================================
 # 1. 사이드바: 분석 설정 및 OpenAI API 세팅
@@ -27,28 +27,26 @@ with st.sidebar:
     max_peaks_to_show = st.slider("핵심 피크 표시 개수 제한", min_value=1, max_value=5, value=5)
 
 # ==========================================
-# 2. 데이터 업로드 및 스마트 파일명 파서 (시간/형태 추출)
+# 2. 데이터 업로드 및 스마트 파일명 파서
 # ==========================================
 uploaded_files = st.file_uploader("📂 R/S form 및 시간별 CSV 파일 업로드 (예: R_60min.csv, S_60min.csv)", type=['csv'], accept_multiple_files=True)
 
 if uploaded_files:
     st.write("---")
-    st.header("📊 시간별 스펙트럼 비교 및 카이랄 대칭성 지표")
+    st.header("📊 시간별 스펙트럼 비교 및 핵심 Peak 트렌드")
     
     fig, ax = plt.subplots(figsize=(10, 5))
     peak_summary = []
     file_metadata = []
     
-    data_tab1, data_tab2 = st.tabs(["📈 오버레이 스펙트럼", "📋 시간별 핵심 Peak 및 대칭성 요약"])
+    data_tab1, data_tab2 = st.tabs(["📈 오버레이 스펙트럼", "📋 시간별 핵심 Peak 요약"])
     
     for f in uploaded_files:
         try:
             clean_name = f.name.replace('.csv', '').replace('.CSV', '')
             parts = clean_name.split('_')
             
-            # 파일명 구조 유연하게 파싱 (예: R_60min 또는 R_close_60min 모두 대응)
             form = parts[0].upper() if len(parts) > 0 else "UNKNOWN"
-            
             time_val = "unknown"
             condition = "closed (default)"
             
@@ -118,26 +116,26 @@ if uploaded_files:
             st.download_button(
                 label="📥 핵심 피크 데이터 CSV 다운로드",
                 data=csv_data,
-                file_name="chiral_time_peaks.csv",
+                file_name="chiral_research_peaks.csv",
                 mime="text/csv",
             )
         else:
             st.info("설정된 민감도에서 감지된 핵심 피크가 없습니다. 사이드바의 민감도를 낮춰보세요.")
 
     # ==========================================
-    # 3. OpenAI API 연동: 시간별 어닐링 및 대칭성 리포트
+    # 3. OpenAI API 연동: 연구원 맞춤형 심층 분석 보고서
     # ==========================================
     st.write("---")
-    st.header("🤖 AI 기반 시간별 어닐링 및 카이랄 대칭성 정밀 평가 리포트")
-    st.write("밀폐(Close) 조건에서 어닐링 시간 변화가 R/S 이성질체의 거울상 대칭성 및 분자 배향 안정화에 미친 영향을 분석합니다.")
+    st.header("🤖 AI 기반 연구용 심층 분석 및 액션 플랜 리포트")
+    st.write("제공해주신 연구원 전문 분석 포맷(Executive Summary, 원인 진단, Action Plan)에 맞춰 AI가 최종 결론을 도출합니다.")
     
-    if st.button("🚀 AI 정밀 분석 및 리포트 생성"):
+    if st.button("🚀 AI 전문 연구 리포트 생성"):
         if not api_key:
             st.error("⚠️ 좌측 사이드바에 OpenAI API Key를 입력해 주세요!")
         elif not peak_summary:
             st.warning("⚠️ 분석할 피크 데이터가 없습니다.")
         else:
-            with st.spinner("AI가 시간대별 R/S형 대칭성 점수와 어닐링 안정화 효과를 분석하고 있습니다..."):
+            with st.spinner("AI가 고도화된 연구 보고서(Executive Summary & Action Plan)를 작성하고 있습니다..."):
                 try:
                     client = openai.OpenAI(api_key=api_key)
                     
@@ -145,21 +143,25 @@ if uploaded_files:
                     meta_info = "\n".join(file_metadata)
                     
                     system_prompt = (
-                        "당신은 카이랄 분광학 및 물리화학 수석 연구원입니다. "
-                        "사용자는 모든 비커를 밀폐(Close)한 상태에서 어닐링 시간(예: 40분, 60분, 90분, 120분 등)을 다변화하며 "
-                        "R-form과 S-form의 거울상 대칭성(Cotton Effect) 변화를 연구 중입니다. "
-                        "절대로 비커를 열어두었다는 식의 가짜 해석을 하지 말고, 밀폐된 환경에서의 시간별 어닐링 효과에 집중하세요. "
-                        "결과 리포트는 다음 구조를 반드시 포함해 주세요:\n\n"
-                        "1. **시간대별 R/S형 거울상 대칭성 정량 평가 (Chiral Symmetry Score)**:\n"
-                        "   - 동일 시간대(예: 60분짜리 R과 S)별로 파장 일치 여부와 Cotton Effect 부호 반전 여부를 대조하고, 대칭성 일치도(%)를 산출하여 평가하세요.\n"
-                        "2. **어닐링 시간(40분~120분 등)에 따른 분자 배향 및 열역학적 안정화 메커니즘**:\n"
-                        "   - 밀폐 조건에서 시간이 경과함에 따라 결정성이나 분자 뭉침(Aggregation)이 어떻게 안정화되거나 수렴하는지 분석하세요.\n"
-                        "3. **실험 성공/실패 진단 및 향후 액션 플랜 (Conclusion & Action Plan)**:\n"
-                        "   - 데이터가 이론적 거울상 대칭성을 잘 따르는지, 혹은 특정 시간대에서 오차가 발생하는지 냉정하게 진단하고, "
-                        "   - 최적의 어닐링 시간(예: 몇 분이 가장 이상적인가)을 제안하며 추가 실험을 위한 실질적인 피드백을 제공하세요."
+                        "당신은 고분자 화학 및 분광학 분야의 수석 선임 연구원입니다. "
+                        "사용자는 밀폐(Close) 조건에서 어닐링 시간을 다변화하며(예: 40분, 60분, 90분, 120분 등) R-form과 S-form의 CD 스펙트럼 변화를 분석하고 있습니다. "
+                        "출력 결과는 반드시 아래의 **지정된 포맷과 톤앤매너**를 정확히 준수하여 전문적이고 날카롭게 작성해 주세요:\n\n"
+                        "### Executive Summary\n"
+                        "- 실험 결과를 종합하여, 특정 시간 구간(예: 90~120분 등)에서의 신호 안정성, R/S형 각각의 peak intensity 트렌드, 그리고 mirror symmetry 충족 여부를 명확히 요약하세요.\n\n"
+                        "### Overall Recommendation\n"
+                        "- 현재 데이터에 기반하여 가장 적합한 최적의 Annealing 시간(예: 90분 등)을 선정하고 그 이유를 서술하세요.\n"
+                        "- 만약 특정 시간대에서 **Peak가 갑자기 이동(Shift)**했다면, 가능한 원인으로 다음 중 타당한 것을 지목하세요: (Sample alignment, Instrument noise, Film thickness variation, Annealing temperature deviation).\n"
+                        "- 특정 형태(예: S-form)에서 Positive/Negative peak가 유지되거나 변화하는 것이 분자배향 안정화, Molecular packing, Increased crystallinity, Reduced conformational disorder와 어떤 연관이 있는지 해석하세요.\n"
+                        "- 현재 데이터만으로는 인접 시간대(예: 90분과 120분) 간의 차이가 크지 않다는 점을 진단하세요.\n\n"
+                        "### 추천 Action Plan (체크박스 형태로 명시)\n"
+                        "추가 실험이나 검토가 필요한 항목을 아래 형식의 체크박스로 정확히 제안하세요:\n"
+                        "□ [추가 시간 측정 제안, 예: 100분 추가 측정]\n"
+                        "□ [추가 시간 측정 제안, 예: 110분 추가 측정]\n"
+                        "□ Temperature variation 검토\n"
+                        "□ Repeat measurement (재현성 검증)"
                     )
                     
-                    user_prompt = f"### 실험 파일 정보\n{meta_info}\n\n### 시간별 상위 핵심 피크 데이터\n{prompt_data}\n\n위 데이터를 바탕으로 밀폐 조건에서의 시간별 어닐링 효과, R/S형 간 대칭성 수치 평가, 그리고 실험 성공/실패 진단 및 최적 시간 도출 리포트를 작성해 줘."
+                    user_prompt = f"### 실험 파일 정보\n{meta_info}\n\n### 시간별 상위 핵심 피크 데이터\n{prompt_data}\n\n위 데이터를 바탕으로 제시된 포맷(Executive Summary, Overall Recommendation, 구체적 원인 진단 및 체크박스 추천 Action Plan)에 정확히 맞춘 최고급 연구 분석 보고서를 작성해 줘."
                     
                     response = client.chat.completions.create(
                         model="gpt-4o-mini",
@@ -170,8 +172,8 @@ if uploaded_files:
                         temperature=0.2
                     )
                     
-                    st.success("✅ AI 정밀 분석 완료!")
-                    st.markdown(f"### 📑 시간별 어닐링 및 대칭성 평가 최종 보고서")
+                    st.success("✅ AI 연구 분석 리포트 생성 완료!")
+                    st.markdown(f"### 📑 최종 연구 분석 보고서")
                     st.write(response.choices[0].message.content)
                     
                 except Exception as e:
