@@ -95,7 +95,8 @@ if uploaded_files:
         if peak_summary:
             peak_df = pd.DataFrame(peak_summary)
             peak_df = peak_df.sort_values(by=["위치(X/nm)"]).reset_index(drop=True)
-            st.dataframe(peak_df, use_icon=True, use_container_width=True)
+            # 에러 원인이었던 잘못된 속성을 제거하고 정상적인 파라미터만 남겼습니다.
+            st.dataframe(peak_df, use_container_width=True)
         else:
             st.info("설정된 민감도에서 감지된 피크가 없습니다. 왼쪽 사이드바에서 민감도를 조절해 보세요.")
 
@@ -125,9 +126,9 @@ if uploaded_files:
                         "리포트를 작성할 때 다음 핵심 분석을 반드시 포함하고 수치적으로 증명해야 합니다:\n\n"
                         "1. **거울상 대칭성(Mirror-Image Symmetry & Cotton Effect) 정밀 평가 (최우선 필수)**:\n"
                         "   - R-form과 S-form 간에 동일 파장(X축) 대역에서 피크의 부호(Positive/Negative)가 정확히 반전되는지(Cotton Effect 발현 여부) 분석하세요.\n"
-                        "   - 두 이성질체의 피크 강도(Y값 절대값)가 어느 정도 일치하는지, 대칭성이 완벽한지 아니면 한쪽이 깨졌는지(오차율/비대칭성 원인 포함) 구체적인 수치와 파장을 언급하며 평가하세요.\n"
+                        "   - 두 이성질체의 피크 강도(Y값 절대값)가 어느 정도 일치하는지, 대칭성이 완벽한지 아니면 한쪽이 깨졌는지 구체적인 수치와 파장을 언급하며 평가하세요.\n"
                         "2. **비커 개폐 조건 및 공정 메커니즘 해석**:\n"
-                        "   - Open/Half/Close 조건에 따른 용매 증발 속도 차이가 분자 배향과 카이랄 구조 형성에 미친 영향을 열역학적으로 설명하세요.\n"
+                        "   - Open/Half/Close 조건에 따른 용매 증발 속도 차이가 분자 배향과 카이랄 구조 형성에 미친 영향을 설명하세요.\n"
                         "3. **결론 및 최적 조건 제안**"
                     )
                     
