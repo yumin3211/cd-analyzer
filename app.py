@@ -13,7 +13,7 @@ st.title("🔬 카이랄 분광 데이터 종합 분석 및 논문형 리포트 
 st.write("시간/조건별 R·S 이성질체 정량 비교, 이상 탐지, 논문형 리포트 생성 및 분석 결과 아카이브(Save) 시스템입니다.")
 
 # ==========================================
-# 0. 세션 상태(Session State) 초기화 (저장 기능용)
+# 0. 세션 상태(Session State) 초기화
 # ==========================================
 if 'saved_reports' not in st.session_state:
     st.session_state.saved_reports = []
@@ -40,7 +40,7 @@ uploaded_files = st.file_uploader("📂 R/S form 및 시간/조건별 CSV 파일
 
 if uploaded_files:
     st.write("---")
-    st.header("📊 스펙트럼 오버레이 및 정량적 카이랄 대칭성 분석")
+    st.header("📊 스펙트럼 오버레이 및 R/S 이성질체 간 거울상 대칭성 정량 분석")
     
     fig, ax = plt.subplots(figsize=(10, 5))
     peak_summary = []
@@ -50,7 +50,7 @@ if uploaded_files:
     
     data_tab1, data_tab2, data_tab3, data_tab4 = st.tabs([
         "📈 오버레이 스펙트럼", 
-        "📊 시간대별 정량 비교(대칭성 및 이동량)", 
+        "📊 조건별 R vs S 거울상 대칭성 비교", 
         "📋 전체 핵심 Peak 요약",
         "📂 저장된 분석 기록 (Save Archive)"
     ])
@@ -77,6 +77,7 @@ if uploaded_files:
                 elif p_lower in ['open', 'half', 'h', 'close', 'closed', 'c']:
                     condition = p_lower
             
+            # R과 S를 올바르게 짝짓기 위해 시간과 조건만 그룹 키로 사용
             group_key = f"{time_val} ({condition})"
             file_metadata.append(f"파일: {f.name} (형태: {form}, 조건: {condition}, 시간: {time_val})")
             
@@ -103,9 +104,9 @@ if uploaded_files:
             
             total_peaks_detected = len(peaks_pos) + len(peaks_neg)
             if total_peaks_detected > 20:
-                anomaly_reports.append(f"⚠️ **{f.name}**: 비정상적으로 많은 피크({total_peaks_detected}개)가 검출되었습니다. Instrument noise가 의심되므로 재측정(Repeat measurement)을 권장합니다.")
+                anomaly_reports.append(f"⚠️ **{f.name}**: 비정상적으로 많은 피크({total_peaks_detected}개) 검출. Instrument noise 점검 필요.")
             if len(y) > 0 and max(abs(y)) < 0.5:
-                anomaly_reports.append(f"⚠️ **{f.name}**: 최대 신호 세기가 매우 낮습니다(Max < 0.5). Sample concentration 부족 또는 Film thickness 문제를 확인하세요.")
+                anomaly_reports.append(f"⚠️ **{f.name}**: 신호 세기가 매우 낮음(Max < 0.5). 농도 또는 필름 두께 확인 필요.")
             
             ax.plot(x, y, label=f.name, linewidth=1.5)
             ax.plot(x[peaks_pos], y[peaks_pos], "x", color='red', markersize=6)
@@ -113,9 +114,9 @@ if uploaded_files:
             
             sample_peaks = []
             for p in peaks_pos:
-                sample_peaks.append({"샘플명": f.name, "형태": form, "그룹": group_key, "유형": "Positive", "파장(nm)": round(x[p], 2), "강도(Y)": round(y[p], 3), "AbsY": abs(y[p])})
+                sample_peaks.append({"샘플명": f.name, "형태": form, "조건그룹": group_key, "유형": "Positive", "파장(nm)": round(x[p], 2), "강도(Y)": round(y[p], 3), "AbsY": abs(y[p])})
             for p in peaks_neg:
-                sample_peaks.append({"샘플명": f.name, "형태": form, "그룹": group_key, "유형": "Negative", "파장(nm)": round(x[p], 2), "강도(Y)": round(y[p], 3), "AbsY": abs(y[p])})
+                sample_peaks.append({"샘플명": f.name, "형태": form, "조건그룹": group_key, "유형": "Negative", "파장(nm)": round(x[p], 2), "강도(Y)": round(y[p], 3), "AbsY": abs(y[p])})
             
             if group_key not in time_groups:
                 time_groups[group_key] = {"R": [], "S": []}
@@ -135,41 +136,39 @@ if uploaded_files:
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     ax.grid(True, linestyle='--', alpha=0.6)
     
+    # 동일 조건 그룹 내에서 R과 S의 거울상 대칭성(Mirror Symmetry) 정량 비교 계산
     symmetry_results = []
     for g_key, forms in time_groups.items():
-        r_peaks = sorted(forms["R"], key=lambda k: k["AbsY"], reverse=True)
-        s_peaks = sorted(forms["S"], key=lambda k: k["AbsY"], reverse=True)
+        r_peaks = forms["R"]
+        s_peaks = forms["S"]
         
         if r_peaks and s_peaks:
-            r_max_peak = r_peaks[0]
-            s_max_peak = s_peaks[0]
+            r_top = sorted(r_peaks, key=lambda k: k["AbsY"], reverse=True)[0]
+            s_top = sorted(s_peaks, key=lambda k: k["AbsY"], reverse=True)[0]
             
-            peak_shift = round(abs(r_max_peak["파장(nm)"] - s_max_peak["파장(nm)"]), 2)
-            
-            r_intensity = r_max_peak["AbsY"]
-            s_intensity = s_max_peak["AbsY"]
-            intensity_ratio = min(r_intensity, s_intensity) / max(r_intensity, s_intensity) * 100
+            peak_shift = round(abs(r_top["파장(nm)"] - s_top["파장(nm)"]), 2)
+            intensity_ratio = min(r_top["AbsY"], s_top["AbsY"]) / max(r_top["AbsY"], s_top["AbsY"]) * 100
             
             shift_penalty = max(0, 100 - (peak_shift * 10))
             symmetry_score = round((intensity_ratio * 0.6) + (shift_penalty * 0.4), 1)
             symmetry_score = max(5.0, min(99.9, symmetry_score))
             
             symmetry_results.append({
-                "조건(시간)": g_key,
-                "R형 주요 파장(nm)": r_max_peak["파장(nm)"],
-                "S형 주요 파장(nm)": s_max_peak["파장(nm)"],
-                "피크 이동량(Shift)": f"{peak_shift} nm",
-                "거울상 대칭성(%)": f"{symmetry_score}%",
-                "평가": "우수" if symmetry_score > 85 else ("보통" if symmetry_score > 60 else "비대칭 심화 (검토 요망)")
+                "실험 조건(그룹)": g_key,
+                "R형 대표 파장": f"{r_top['파장(nm)']} nm ({r_top['유형']})",
+                "S형 대표 파장": f"{s_top['파장(nm)']} nm ({s_top['유형']})",
+                "파장 편차(Shift)": f"{peak_shift} nm",
+                "거울상 대칭성 일치도(%)": f"{symmetry_score}%",
+                "대칭성 평가": "완벽한 대칭 (Mirror-image)" if symmetry_score > 85 else ("보통" if symmetry_score > 60 else "대칭성 붕괴 (비대칭)")
             })
-        elif r_peaks or s_peaks:
+        else:
             symmetry_results.append({
-                "조건(시간)": g_key,
-                "R형 주요 파장(nm)": r_peaks[0]["파장(nm)"] if r_peaks else "-",
-                "S형 주요 파장(nm)": s_peaks[0]["파장(nm)"] if s_peaks else "-",
-                "피크 이동량(Shift)": "-",
-                "거울상 대칭성(%)": "측정 불가",
-                "평가": "비교 대상(R/S 짝) 누락"
+                "실험 조건(그룹)": g_key,
+                "R형 대표 파장": "데이터 있음" if r_peaks else "누락",
+                "S형 대표 파장": "데이터 있음" if s_peaks else "누락",
+                "파장 편차(Shift)": "-",
+                "거울상 대칭성 일치도(%)": "측정 불가",
+                "대칭성 평가": "R 또는 S 쌍(Pair) 불완전"
             })
 
     with data_tab1:
@@ -180,17 +179,18 @@ if uploaded_files:
                 st.write(report)
         
     with data_tab2:
-        st.subheader("📊 동일 조건/시간 내 R-form vs S-form 정량 비교")
+        st.subheader("📊 동일 조건 내 [R-form vs S-form] 거울상 대칭성 정량 분석")
+        st.info("💡 카이랄 실험의 핵심은 **동일 조건(시간/개폐)에서 R형과 S형이 서로 완벽한 거울상 대칭(Cotton Effect 반전 및 일치)**을 이루는지 비교하는 것입니다.")
         if symmetry_results:
             sym_df = pd.DataFrame(symmetry_results)
             st.dataframe(sym_df, use_container_width=True)
         else:
-            st.warning("대칭성을 비교할 수 있는 짝(R/S) 데이터가 없습니다.")
+            st.warning("비교할 수 있는 R/S 쌍 데이터가 없습니다.")
 
     with data_tab3:
         if peak_summary:
             peak_df = pd.DataFrame(peak_summary).drop(columns=["AbsY"], errors='ignore')
-            peak_df = peak_df.sort_values(by=["그룹", "파장(nm)"]).reset_index(drop=True)
+            peak_df = peak_df.sort_values(by=["조건그룹", "파장(nm)"]).reset_index(drop=True)
             st.dataframe(peak_df, use_container_width=True)
         else:
             st.info("조건에 맞는 피크가 없습니다.")
@@ -199,23 +199,23 @@ if uploaded_files:
         st.subheader("📂 저장된 분석 결과 기록 (Save Archive)")
         if st.session_state.saved_reports:
             for idx, item in enumerate(st.session_state.saved_reports):
-                with st.expander(f"📌 [{idx+1}] 저장된 리포트 ({item['time']}) - 업로드 파일수: {item['file_count']}개"):
+                with st.expander(f"📌 [{idx+1}] 저장된 리포트 ({item['time']}) - 파일수: {item['file_count']}개"):
                     st.markdown(item['content'])
-                    if st.button(f"🗑️ 이 기록 삭제하기 (No. {idx+1})", key=f"del_{idx}"):
+                    if st.button(f"🗑️ 이 기록 삭제 (No. {idx+1})", key=f"del_{idx}"):
                         st.session_state.saved_reports.pop(idx)
                         st.rerun()
-            if st.button("🧹 모든 저장 기록 초기화"):
+            if st.button("🧹 모든 기록 초기화"):
                 st.session_state.saved_reports.clear()
                 st.rerun()
         else:
-            st.info("💡 아직 저장된 분석 기록이 없습니다. 아래에서 AI 리포트를 생성한 뒤 **[💾 이 분석 결과 Save하기]** 버튼을 눌러보세요!")
+            st.info("💡 저장된 기록이 없습니다. 아래에서 리포트를 생성한 뒤 Save 버튼을 눌러보세요!")
 
     # ==========================================
-    # 3. OpenAI API 연동 및 Save 기능
+    # 3. OpenAI API 연동: 정확한 R/S 비교 기반 논문형 리포트
     # ==========================================
     st.write("---")
-    st.header("🤖 AI 수석 연구원: 논문형 심층 분석 및 후속 제안 리포트")
-    st.write("Methods, Results, Discussion, Conclusion 형식의 완벽한 논문 구조 리포트 생성 및 저장 시스템입니다.")
+    st.header("🤖 AI 수석 연구원: R/S 대칭성 비교 중심 논문형 리포트")
+    st.write("R-form과 S-form 간의 거울상 대칭성 검증에 초점을 맞춘 Methods-to-Conclusion 리포트를 생성합니다.")
     
     if st.button("🚀 AI 논문형 리포트 생성"):
         if not api_key:
@@ -223,33 +223,34 @@ if uploaded_files:
         elif not peak_summary:
             st.warning("⚠️ 분석할 피크 데이터가 없습니다.")
         else:
-            with st.spinner("AI가 논문형 리포트를 작성 중입니다..."):
+            with st.spinner("AI가 R/S 이성질체 간 거울상 대칭성 비교를 중심으로 논문형 보고서를 작성 중입니다..."):
                 try:
                     client = openai.OpenAI(api_key=api_key)
                     
                     prompt_data = pd.DataFrame(peak_summary).drop(columns=["AbsY"], errors='ignore').to_string(index=False)
                     sym_data = pd.DataFrame(symmetry_results).to_string(index=False)
-                    anomaly_data = "\n".join(set(anomaly_reports)) if anomaly_reports else "탐지된 특이 노이즈 없음. 데이터 양호."
+                    anomaly_data = "\n".join(set(anomaly_reports)) if anomaly_reports else "탐지된 노이즈 없음. 양호."
                     meta_info = "\n".join(file_metadata)
                     
                     system_prompt = (
-                        "당신은 화학 및 카이랄 분광학 분야의 세계적인 수석 연구원입니다. "
-                        "사용자의 분광 데이터를 바탕으로, 단순 요약이 아닌 '결과 해석, 원인 추론, 실험의 물리화학적 의미 설명'이 포함된 최고 수준의 논문형 보고서를 작성해 주세요. "
-                        "다음 구조(Methods, Results, Discussion, Conclusion & Next Steps)를 엄격히 지켜 마크다운으로 작성하세요.\n\n"
+                        "당신은 화학 및 카이랄 분광학(CD) 분야의 세계적인 수석 연구원입니다. "
+                        "이 실험의 본질은 **동일 조건(시간, 개폐 상태)에서 R-form과 S-form을 쌍(Pair)으로 비교하여 거울상 대칭성(Cotton Effect 및 부호 반전, 파장 일치도)을 평가**하는 것입니다. "
+                        "절대로 개별 샘플(예: R_open_30 혼자서)의 대칭성이 높다는 식의 치명적인 오류를 범하지 마세요. 대칭성은 반드시 R형과 S형을 서로 비교할 때만 성립합니다.\n\n"
+                        "다음 논문 구조에 맞춰 리포트를 작성하세요:\n"
                         "### 1. 🧪 Methods (실험 방법 개요)\n"
-                        "- 업로드된 파일 정보와 조건(Annealing 시간, 개폐 여부)을 바탕으로 실험이 어떻게 구성되었는지 간략히 서술.\n\n"
-                        "### 2. 📊 Results (결과 및 정량 지표)\n"
-                        "- 시간별 R/S형의 거울상 대칭성(%), 피크 이동량(Shift), 그리고 강도 변화 트렌드를 수치에 기반하여 명확히 서술.\n"
-                        "- 전달된 '이상 탐지(Anomaly Detection)' 데이터가 있다면 노이즈나 비정상 피크 발생 여부를 서술.\n\n"
-                        "### 3. 🧠 Discussion (심층 원인 분석 및 해석)\n"
-                        "- Peak Shift 또는 대칭성 붕괴의 원인 추론 (예: Sample alignment, Film thickness variation, Temperature deviation 등).\n"
-                        "- 카이랄성(CD signal) 증감의 열역학적/구조적 의미 설명 (예: Molecular packing, Crystallinity 증가, 배향 안정화 등).\n\n"
+                        "- R-form과 S-form을 동일 조건별로 짝지어 비교하는 대칭성 검증 실험 구조 요약.\n\n"
+                        "### 2. 📊 Results (R/S 대칭성 비교 결과)\n"
+                        "- 동일 조건(시간/상태)별 R형과 S형의 거울상 대칭성 지표(%) 및 파장 이동량(Shift) 결과를 수치 기반으로 명확히 서술.\n"
+                        "- 이상 탐지(Anomaly Detection) 데이터 반영.\n\n"
+                        "### 3. 🧠 Discussion (거울상 대칭성 분석 및 물리화학적 의미)\n"
+                        "- R/S 쌍 간의 대칭성이 유지되거나 붕괴된 원인 추론 (예: Sample alignment 오차, Film thickness 비균일성, 온도 편차 등).\n"
+                        "- 카이랄성 발현 및 Molecular packing, Crystallinity 관점에서의 해석.\n\n"
                         "### 4. 🚀 Conclusion & Next Steps (결론 및 다음 실험 제안)\n"
-                        "- 현재 조건 중 가장 최적화된 조건(시간 등)을 결론 내림.\n"
-                        "- 다음 실험 제안을 위해 **구체적인 시간, 온도, 농도 조건**을 체크박스(- [ ]) 형태로 제시 (예: 110분 추가 측정, 온도 5도 상향 조정 등)."
+                        "- 가장 완벽한 거울상 대칭성을 보여준 최적의 조건(시간 등) 결론 도출.\n"
+                        "- 다음 실험을 위한 구체적 제안을 체크박스(- [ ]) 형태로 제시 (예: 110분 추가 측정, 온도 보정 등)."
                     )
                     
-                    user_prompt = f"### 메타 데이터\n{meta_info}\n\n### 대칭성 및 Shift 정량 데이터\n{sym_data}\n\n### 이상 탐지 내역\n{anomaly_data}\n\n### 핵심 피크 데이터\n{prompt_data}\n\n위 데이터를 바탕으로 완벽한 논문 구조의 리포트를 작성해 줘."
+                    user_prompt = f"### 메타 데이터\n{meta_info}\n\n### R vs S 대칭성 정량 비교 데이터\n{sym_data}\n\n### 이상 탐지 내역\n{anomaly_data}\n\n### 핵심 피크 데이터\n{prompt_data}\n\n위 데이터를 바탕으로 R/S 쌍 비교 중심의 정확한 논문형 리포트를 작성해 줘."
                     
                     response = client.chat.completions.create(
                         model="gpt-4o-mini",
@@ -261,8 +262,6 @@ if uploaded_files:
                     )
                     
                     report_content = response.choices[0].message.content
-                    
-                    # 세션에 임시 저장용으로 보관
                     st.session_state.current_report = report_content
                     st.session_state.current_file_count = len(uploaded_files)
                     
@@ -271,7 +270,6 @@ if uploaded_files:
                 except Exception as e:
                     st.error(f"OpenAI API 호출 중 오류가 발생했습니다: {e}")
 
-    # 리포트가 생성되어 있는 경우에만 Save 및 다운로드 버튼 활성화
     if 'current_report' in st.session_state:
         st.markdown("---")
         st.markdown(st.session_state.current_report)
