@@ -43,7 +43,6 @@ if uploaded_files:
     
     for f in uploaded_files:
         try:
-            # 파일 이름으로부터 조건(Open/Half/Close, 시간, R/S) 자동 파싱
             clean_name = f.name.replace('.csv', '').replace('.CSV', '')
             parts = clean_name.split('_')
             form = parts[0].upper() if len(parts) > 0 else "UNKNOWN"
@@ -101,11 +100,11 @@ if uploaded_files:
             st.info("설정된 민감도에서 감지된 피크가 없습니다. 왼쪽 사이드바에서 민감도를 조절해 보세요.")
 
     # ==========================================
-    (= 3. OpenAI API 연동: 카이랄 특성 및 공정 조건 심층 해석)
+    # 3. OpenAI API 연동: 카이랄 특성 및 공정 조건 심층 해석
     # ==========================================
     st.write("---")
     st.header("🤖 LLM 기반 카이랄성 및 증발 제어 공정 심층 해석 리포트")
-    st.write("비커 개폐 조건(Open/Half/Close)에 따른 용매 증발 속도 제어가 R/S 이성질체의 거울상 대칭성(Cotton Effect)에 미친 영향을 분석합니다.")
+    st.write("비커 개폐 조건(Open/Half/Close) 또는 시간에 따른 용매 증발 제어가 R/S 이성질체의 거울상 대칭성(Cotton Effect)에 미친 영향을 분석합니다.")
     
     if st.button("🚀 AI 카이랄 공정 분석 실행"):
         if not api_key:
@@ -113,7 +112,7 @@ if uploaded_files:
         elif not peak_summary:
             st.warning("⚠️ 분석할 피크 데이터가 없습니다.")
         else:
-            with st.spinner("AI가 거울상 대칭성과 비커 개폐 조건별 공정 메커니즘을 분석하고 있습니다..."):
+            with st.spinner("AI가 거울상 대칭성과 공정 조건별 메커니즘을 분석하고 있습니다..."):
                 try:
                     client = openai.OpenAI(api_key=api_key)
                     
@@ -122,15 +121,15 @@ if uploaded_files:
                     
                     system_prompt = (
                         "당신은 고분자 화학 및 분광학(CD 스펙트럼) 분야의 수석 연구원입니다. "
-                        "사용자는 비커를 열고(Open), 반만 닫고(Half), 완전히 닫은(Close) 조건에서 어닐링 시간을 조절하며 "
+                        "사용자는 비커 조건(Open/Half/Close)이나 어닐링 시간을 조절하며 "
                         "R-form과 S-form 물질의 카이랄성(거울상 대칭성, Cotton Effect) 변화를 연구하고 있습니다. "
                         "제공된 파일 메타데이터와 피크 데이터를 바탕으로 다음 내용을 포함한 전문적인 연구 분석 리포트를 작성해 주세요:\n"
                         "1. R-form과 S-form 간의 거울상 대칭성(Cotton Effect 및 부호 반전 여부) 평가\n"
-                        "2. 비커 개폐 조건(Open/Half/Close)에 따른 용매 증발 속도 제어가 분자 배향과 카이랄성 발현에 미친 열역학적/공정적 영향 해석\n"
+                        "2. 조건(개폐 여부 또는 시간 등)에 따른 용매 증발 속도 제어가 분자 배향과 카이랄성 발현에 미친 열역학적/공정적 영향 해석\n"
                         "3. 데이터에 기반한 최적의 공정 조건 도출"
                     )
                     
-                    user_prompt = f"### 실험 파일 정보\n{meta_info}\n\n### 추출된 피크 데이터\n{prompt_data}\n\n위 데이터를 바탕으로 카이랄성 변화와 비커 조건별 공정 특성을 심층 분석해 줘."
+                    user_prompt = f"### 실험 파일 정보\n{meta_info}\n\n### 추출된 피크 데이터\n{prompt_data}\n\n위 데이터를 바탕으로 카이랄성 변화와 공정 특성을 심층 분석해 줘."
                     
                     response = client.chat.completions.create(
                         model="gpt-4o-mini",
