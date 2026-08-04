@@ -42,22 +42,18 @@ if uploaded_files:
     
     for f in uploaded_files:
         try:
-            # 파일 포인터를 처음으로 되돌림
             f.seek(0) 
             
             try:
-                # [시도 1] 일반적인 깔끔한 CSV 파일로 읽기 시도
                 df = pd.read_csv(f)
                 x_col = df.columns[0]
                 y_col = df.columns[-1]
             except:
-                # [시도 2] 에러 발생 시: CD 스펙트럼 등 장비 Raw Data로 간주하고 스마트 파싱
                 f.seek(0)
                 df = pd.read_csv(f, skiprows=21, header=None)
-                x_col = 0 # X축: 파장(Wavelength)
-                y_col = 2 # Y축: CD 강도 (장비마다 다를 수 있으나 CD는 보통 3번째 열)
+                x_col = 0
+                y_col = 2
             
-            # 숫자 데이터만 추출 (문자가 섞여 있으면 NaN으로 변환 후 제거)
             df[x_col] = pd.to_numeric(df[x_col], errors='coerce')
             df[y_col] = pd.to_numeric(df[y_col], errors='coerce')
             df = df.dropna(subset=[x_col, y_col]) 
@@ -65,16 +61,13 @@ if uploaded_files:
             x = df[x_col].values
             y = df[y_col].values
             
-            # Scipy 알고리즘을 이용한 피크 탐지
             peaks_pos, _ = find_peaks(y, prominence=prominence)
             peaks_neg, _ = find_peaks(-y, prominence=prominence)
             
-            # 그래프 그리기
             ax.plot(x, y, label=f.name, linewidth=1.5)
             ax.plot(x[peaks_pos], y[peaks_pos], "x", color='red', markersize=6)
             ax.plot(x[peaks_neg], y[peaks_neg], "x", color='blue', markersize=6)
             
-            # 피크 데이터 저장
             for p in peaks_pos:
                 peak_summary.append({"샘플명": f.name, "구분": "Positive Peak", "위치(X)": round(x[p], 2), "강도(Y)": round(y[p], 3)})
             for p in peaks_neg:
@@ -83,7 +76,6 @@ if uploaded_files:
         except Exception as e:
             st.error(f"{f.name} 처리 중 알 수 없는 오류 발생: {e}")
 
-    # 그래프 세팅 마무리
     ax.axhline(0, color='black', linewidth=0.8)
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     ax.grid(True, linestyle='--', alpha=0.6)
