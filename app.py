@@ -9,10 +9,10 @@ import io
 # ==========================================
 # 웹사이트 기본 설정
 # ==========================================
-st.set_page_config(page_title="AI CD Spectrum Analyzer", layout="wide")
+st.set_page_config(page_title="AI Analyzer", layout="wide")
 
-st.title("🔬 AI CD Spectrum Analyzer")
-st.write("다중 샘플 간의 거울상 대칭성(Mirror Symmetry) 정량 비교, 피크 이동량 분석 및 ACS 논문 수준의 심층 리포트를 자동 생성합니다.")
+st.title("🔬 AI Analyzer")
+st.write("다중 샘플 간의 거울상 대칭성 정량 비교, 피크 이동량 분석 및 ACS 논문 수준의 심층 리뷰 리포트를 자동 생성합니다.")
 
 if 'saved_reports' not in st.session_state:
     st.session_state.saved_reports = []
@@ -45,7 +45,7 @@ if uploaded_files:
     file_metadata = []
     time_groups = {}
     
-    # 탭 구성 (랭킹 및 비교 탭 추가)
+    # 탭 구성
     tab_graph, tab_ranking, tab_raw_data, tab_archive = st.tabs([
         "📈 논문형 오버레이 그래프", 
         "🏆 종합 랭킹 & Batch Compare", 
@@ -120,7 +120,7 @@ if uploaded_files:
             st.error(f"{f.name} 처리 중 오류 발생: {e}")
 
     # ==========================================
-    # 정량적 대칭성 및 랭킹 데이터 산출 (Python Base)
+    # 정량적 대칭성 및 랭킹 데이터 산출
     # ==========================================
     raw_calc_results = []
     
@@ -139,7 +139,6 @@ if uploaded_files:
             sym_val = round((intensity_ratio * 0.6) + (shift_penalty * 0.4), 1)
             sym_val = max(5.0, min(99.9, sym_val))
             
-            # 논문형 그래프 자동 표시 (어노테이션)
             anchor_x = r_top["파장(nm)"]
             anchor_y = r_top["강도(Y)"]
             ax.annotate(f"[{g_key}]\nShift: {shift_val} nm\nSym: {sym_val}%",
@@ -172,30 +171,27 @@ if uploaded_files:
             
             col1, col2, col3 = st.columns(3)
             
-            # 1. Symmetry Ranking
             with col1:
                 st.markdown("#### 🥇 Symmetry Ranking")
                 sym_sorted = df_calc.sort_values(by="Symmetry_%", ascending=False)
                 for idx, row in sym_sorted.iterrows():
                     st.markdown(f"**{row['Group']}** : {row['Symmetry_%']}%")
             
-            # 2. Shift Ranking (낮을수록 좋음)
             with col2:
                 st.markdown("#### 🎯 Peak Shift Ranking")
                 shift_sorted = df_calc.sort_values(by="Shift_nm", ascending=True)
                 for idx, row in shift_sorted.iterrows():
                     st.markdown(f"**{row['Group']}** : {row['Shift_nm']} nm")
                     
-            # 3. Batch Compare (Best/Worst)
             with col3:
                 st.markdown("#### 🏭 Batch Compare")
                 best_sample = sym_sorted.iloc[0]['Group']
                 worst_sample = sym_sorted.iloc[-1]['Group']
                 st.markdown(f"- **Best Sample:** `{best_sample}`")
                 st.markdown(f"- **Worst Sample:** `{worst_sample}`")
-                st.markdown(f"- **Recommendation:**\n  `{best_sample}` 공정 유지\n  `{worst_sample}` Annealing 조건 재검토")
+                st.markdown(f"- **Recommendation:**\n  `{best_sample}` 공정 유지\n  `{worst_sample}` Annealing 다시")
         else:
-            st.warning("대칭성을 비교할 수 있는 R/S 짝이 부족하여 랭킹을 산출할 수 없습니다.")
+            st.warning("대칭성을 비교할 수 있는 R/S 짝이 부족합니다.")
 
     with tab_raw_data:
         if raw_calc_results:
@@ -217,10 +213,10 @@ if uploaded_files:
             st.info("아직 저장된 기록이 없습니다.")
 
     # ==========================================
-    # 3. AI CD Spectrum Analyzer 프롬프트 및 리포트 생성
+    # 3. AI Analyzer 심층 리포트 생성
     # ==========================================
     st.write("---")
-    st.header("🤖 AI CD Spectrum Analyzer 심층 리포트")
+    st.header("🤖 AI Analyzer 심층 리포트")
     
     col_btn1, col_btn2 = st.columns(2)
     
@@ -228,36 +224,43 @@ if uploaded_files:
     calc_data = pd.DataFrame(raw_calc_results).to_string(index=False) if raw_calc_results else "비교 데이터 없음"
     meta_info = "\n".join(file_metadata)
 
-    # 버튼 1: AI 종합 비교 리포트 생성
-    if col_btn1.button("📊 종합 비교 리포트 생성 (Confidence & Error 포함)"):
+    # 버튼 1: 연구원용 심층 리뷰 (Feedback 반영판)
+    if col_btn1.button("📊 종합 비교 리포트 (Reviewer & 컨설턴트 포함)"):
         if not api_key: st.error("⚠️ OpenAI API Key를 입력해 주세요!")
         elif not raw_calc_results: st.warning("⚠️ R/S 비교 데이터가 필요합니다.")
         else:
-            with st.spinner("AI가 데이터 신뢰도 및 비교 분석 리포트를 작성 중입니다..."):
+            with st.spinner("AI가 연구 논문 리뷰어 수준의 심층 리포트를 작성 중입니다..."):
                 try:
                     client = openai.OpenAI(api_key=api_key)
                     system_prompt = (
-                        "당신은 AI CD Spectrum Analyzer입니다. 데이터를 단순 나열하지 말고, 조건 간의 수치적 비교를 통해 날카롭게 분석하세요. "
-                        "반드시 아래의 마크다운 포맷을 그대로 사용하여 작성하세요:\n\n"
-                        "### 1. AI Confidence\n"
-                        "★★★★☆ (별점으로 신뢰도 표시)\n"
-                        "- Peak quality : High / Medium / Low\n"
-                        "- Noise : Low / High\n"
-                        "- Matching confidence : [수치]%\n\n"
-                        "### 2. Data Reliability\n"
-                        "[수치]% \n"
-                        "**Reason:** (Peak count, Noise, Shift, Intensity 측면에서 근거 제시)\n\n"
-                        "### 3. Possible Error\n"
-                        "- Sample thickness : [★ 개수로 점수화]\n"
-                        "- Baseline : [★ 개수로 점수화]\n"
-                        "- Instrument Noise : [★ 개수로 점수화]\n"
-                        "- Polarizer : [★ 개수로 점수화]\n\n"
-                        "### 4. AI Discussion (조건 간 구체적 비교)\n"
-                        "(예시 포맷에 맞춰 정확한 데이터 수치로 비교 서술)\n"
-                        "A 조건에서는 Shift가 [X] nm로 가장 작고 Mirror symmetry score가 [Y]%로 가장 높았다.\n"
-                        "이는 Annealing 동안 분자의 chiral arrangement가 안정적으로 유지되었음을 시사한다.\n"
-                        "반면 B 조건에서는 Shift가 [Z] nm로 증가하였으며, Positive/Negative peak pairing이 깨져 분자배향 불균일 가능성이 높다.\n"
-                        "결과적으로 A 조건이 B 조건보다 Mirror symmetry가 [개선율]% 향상되었다."
+                        "당신은 최고 수준의 AI Analyzer입니다. 데이터를 단순 나열하지 말고, 다음 포맷과 논리 구조를 완벽하게 준수하여 작성하세요.\n\n"
+                        "### 1. Data Reliability\n"
+                        "Data Reliability : [계산된 신뢰도]%\n"
+                        "- Peak matching confidence : [High/Medium/Low]\n"
+                        "- Baseline drift가 거의 발생하지 않아 측정 안정성이 확보되었다. (또는 반대 상황 서술)\n"
+                        "- Positive/Negative peak pair가 일관적으로 검출되어 Mirror symmetry 평가의 신뢰도가 높다.\n"
+                        "- 다만 일부 영역에서는 noise peak가 존재하므로 추가 smoothing을 적용하면 재현성이 향상될 수 있다.\n\n"
+                        "### 2. Possible Error\n"
+                        "① Sample thickness variation\n  → CD intensity 변화 가능\n"
+                        "② Baseline drift\n  → Peak intensity가 과대평가될 수 있음\n"
+                        "③ Instrument noise\n  → 특정 파장 영역 신뢰도 영향 가능\n"
+                        "④ Peak matching ambiguity\n  → Shift 계산에 오차 발생 가능\n\n"
+                        "### 3. Discussion\n"
+                        "**Observation**\n[가장 좋은 그룹] 조건에서 Mirror symmetry score가 가장 높았으며 Shift는 [X] nm로 최소였다.\n\n"
+                        "**Interpretation**\nAnnealing 과정에서 분자 재배열이 충분히 진행되어 R/S 구조의 광학적 대칭성이 가장 안정적으로 형성된 것으로 판단된다.\n\n"
+                        "**Scientific meaning**\n이는 분자 packing이 열역학적으로 안정한 상태에 도달했음을 시사한다.\n\n"
+                        "**Recommendation**\n[제안하는 시간/조건]을 추가 측정하여 최적 annealing window를 검증하는 것이 바람직하다.\n\n"
+                        "### 4. AI Reviewer\n"
+                        "**Reviewer Comments**\n"
+                        "**Strength**\n✔ Noise level이 낮아 데이터 품질이 우수함.\n✔ Peak matching 정확도가 높음.\n"
+                        "**Weakness**\n△ Sample 수가 부족함.\n△ Error bar가 없음.\n"
+                        "**Recommendation**\n[Minor Revision / Major Revision 등]\n\n"
+                        "### 5. AI 실험 컨설턴트\n"
+                        "**다음 실험 제안**\n"
+                        "- Annealing [추가 시간] 조건 추가 측정 권장\n"
+                        "- 3회 이상 반복 실험을 통해 재현성 검증 권장\n"
+                        "- Baseline correction 적용 후 재분석 권장\n"
+                        "- UV-Vis 데이터와 비교하여 CD 결과의 일관성 확인 권장"
                     )
                     user_prompt = f"### 메타 데이터\n{meta_info}\n\n### 대칭성 및 Shift 계산 결과\n{calc_data}\n\n위 데이터를 바탕으로 지정된 포맷의 분석 리포트를 작성해 줘."
                     
@@ -267,26 +270,31 @@ if uploaded_files:
                 except Exception as e:
                     st.error(f"오류 발생: {e}")
 
-    # 버튼 2: ACS 수준 Conclusion 생성
+    # 버튼 2: ACS 수준 Conclusion 생성 (4문단 구조)
     if col_btn2.button("📝 Generate Research Conclusion (ACS Paper 수준)"):
         if not api_key: st.error("⚠️ OpenAI API Key를 입력해 주세요!")
         elif not raw_calc_results: st.warning("⚠️ R/S 비교 데이터가 필요합니다.")
         else:
-            with st.spinner("ACS Applied Materials 수준의 Conclusion을 작성 중입니다..."):
+            with st.spinner("ACS Applied Materials 수준의 4문단 Conclusion을 작성 중입니다..."):
                 try:
                     client = openai.OpenAI(api_key=api_key)
                     system_prompt = (
-                        "당신은 AI CD Spectrum Analyzer입니다. 사용자의 분광 데이터를 기반으로 "
-                        "ACS Applied Materials 저널에 실릴 수준의 최고급 Research Conclusion을 마크다운으로 작성하세요.\n\n"
-                        "**작성 규칙:**\n"
-                        "1. '본 결과는 [가장 좋은 조건]에서 분자배향 안정성이 가장 우수함을 보여준다.' 형식으로 시작.\n"
-                        "2. 데이터(Symmetry %, Shift nm)를 근거로 Film packing, Crystallinity 향상 등을 물리화학적으로 논증.\n"
-                        "3. 마지막 단락에 '향후에는 Annealing time과 Temperature를 추가 변수로 고려할 필요가 있다.' 등 명확한 후속 연구 제언 포함."
+                        "당신은 AI Analyzer입니다. 사용자의 분광 데이터를 기반으로 ACS Applied Materials 저널에 실릴 수준의 최고급 Research Conclusion을 작성하세요. "
+                        "반드시 아래의 4가지 소제목을 사용하여 문단을 명확히 나누어 작성해야 합니다.\n\n"
+                        "### ACS Paper Conclusion\n\n"
+                        "**Key finding**\n"
+                        "본 결과는 [가장 좋은 조건]에서 분자배향 안정성이 가장 우수함을 보여준다. (데이터 근거 포함)\n\n"
+                        "**Scientific implication**\n"
+                        "이는 Film packing이 향상되었기 때문으로 판단되며, 열역학적 관점에서 설명.\n\n"
+                        "**Limitation**\n"
+                        "현재 데이터의 한계점(샘플 수, 에러 바 부재 등) 서술.\n\n"
+                        "**Future work**\n"
+                        "향후에는 Annealing time과 Temperature를 추가 변수로 고려할 필요가 있다."
                     )
-                    user_prompt = f"### 대칭성 및 Shift 계산 결과\n{calc_data}\n\n### 핵심 피크 데이터\n{prompt_data}\n\n최고급 저널 수준의 Conclusion을 작성해 줘."
+                    user_prompt = f"### 대칭성 및 Shift 계산 결과\n{calc_data}\n\n### 핵심 피크 데이터\n{prompt_data}\n\n최고급 저널 수준의 4문단 Conclusion을 작성해 줘."
                     
                     response = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], temperature=0.2)
-                    st.session_state.current_report = "### 🎓 ACS-Level Research Conclusion\n\n" + response.choices[0].message.content
+                    st.session_state.current_report = response.choices[0].message.content
                     st.rerun()
                 except Exception as e:
                     st.error(f"오류 발생: {e}")
@@ -307,4 +315,4 @@ if uploaded_files:
                 st.success("🎉 [분석 기록 Archive] 탭에 성공적으로 저장되었습니다!")
         with col_s2:
             md_file = io.BytesIO(st.session_state.current_report.encode('utf-8'))
-            st.download_button(label="📄 Markdown 파일 다운로드 (Word 호환)", data=md_file, file_name="AI_CD_Spectrum_Report.md", mime="text/markdown")
+            st.download_button(label="📄 Markdown 파일 다운로드 (Word 호환)", data=md_file, file_name="AI_Analyzer_Report.md", mime="text/markdown")
